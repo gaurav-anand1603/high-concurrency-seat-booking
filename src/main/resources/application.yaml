@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: seat-booking
+
+server:
+  port: 8081
