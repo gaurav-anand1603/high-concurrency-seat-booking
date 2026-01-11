@@ -18,22 +18,39 @@ public class BookingService {
 
     private final SeatRepository seatRepository;
     private final BookingRepository bookingRepository;
+    private final LockService lockService;
 
     @Transactional
     public Booking bookSeat(Long seatId, Long userId){
-        Seat seat = seatRepository.findById(seatId).orElseThrow(() -> new RuntimeException("Seat Id is not found"));
-        if(seat.getSeatStatus() == SeatStatus.BOOKED){
-            throw new RuntimeException("Seat already booked");
+        String lockKey = "lock:seat:" + seatId;
+        String lockValue = lockService.lockSeat(lockKey);
+        if (lockValue == null) {
+            throw new RuntimeException("Seat is currently being booked by another user");
         }
-        // Seat is available
-        seat.setSeatStatus(SeatStatus.BOOKED);
-        seatRepository.save(seat);
+        try {
+            Thread.sleep(5000); // 5 seconds
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
 
-        Booking booking = new Booking();
-        booking.setSeatId(seatId);
-        booking.setUserId(userId);
-        booking.setCreatedAt(LocalDateTime.now());
-        return bookingRepository.save(booking);
+        try {
+            Seat seat = seatRepository.findById(seatId).orElseThrow(() -> new RuntimeException("Seat Id is not found"));
+            if(seat.getSeatStatus() == SeatStatus.BOOKED){
+                throw new RuntimeException("Seat already booked");
+            }
+            // Seat is available
+            seat.setSeatStatus(SeatStatus.BOOKED);
+            seatRepository.save(seat);
+
+            Booking booking = new Booking();
+            booking.setSeatId(seatId);
+            booking.setUserId(userId);
+            booking.setCreatedAt(LocalDateTime.now());
+            return bookingRepository.save(booking);
+
+        } finally {
+            lockService.releaseLock(lockKey, lockValue);
+        }
 
     }
 
